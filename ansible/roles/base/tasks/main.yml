@@ -6,4 +6,5 @@
       - rsync
       - ca-certificates
       - tar
+      - make
     state: present

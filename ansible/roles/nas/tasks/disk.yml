@@ -1,0 +1,19 @@
+- name: Require NAS disk configuration
+  ansible.builtin.assert:
+    that:
+      - nas_disk_device is defined
+      - nas_disk_device | length > 0
+    fail_msg: "nas_disk_device must be configured."
+
+- name: Check whether NAS disk exists
+  ansible.builtin.stat:
+    path: "{{ nas_disk_device }}"
+    follow: true
+  register: nas_disk_stat
+
+- name: Verify NAS disk exists
+  ansible.builtin.assert:
+    that:
+      - nas_disk_stat.stat.exists
+      - nas_disk_stat.stat.isblk | default(false)
+    fail_msg: "NAS disk does not exist or is not a block device."

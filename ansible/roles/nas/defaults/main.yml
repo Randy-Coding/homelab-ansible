@@ -1,0 +1,2 @@
+nas_mount_point: /srv/nas
+nas_filesystem: xfs
