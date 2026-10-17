@@ -1,0 +1,9 @@
+- name: Install baseline system utilities
+  ansible.builtin.dnf:
+    name:
+      - git
+      - curl
+      - rsync
+      - ca-certificates
+      - tar
+    state: present
