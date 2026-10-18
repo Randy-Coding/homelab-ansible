@@ -1,4 +1,4 @@
-.PHONY: bootstrap setup check apply
+.PHONY: bootstrap setup check apply nas-initialize
 
 bootstrap:
 	@command -v uv >/dev/null 2>&1 || { \
@@ -9,6 +9,7 @@ setup: bootstrap
 	uv python install
 	@test -x .venv/bin/python || uv venv --python 3.12
 	uv pip install --python .venv/bin/python -r requirements.txt
+	.venv/bin/ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles/external
 	.venv/bin/ansible-galaxy collection install -r ansible/requirements.yml
 
 check: setup
@@ -16,3 +17,7 @@ check: setup
 
 apply: setup
 	.venv/bin/ansible-playbook ansible/playbooks/site.yml
+
+# Destructive: erase the configured NAS disk and create fresh storage.
+nas-initialize: setup
+	.venv/bin/ansible-playbook ansible/playbooks/site.yml -e nas_initialize=true

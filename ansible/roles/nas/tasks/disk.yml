@@ -5,45 +5,60 @@
       - nas_disk_device is defined
       - nas_disk_serial is defined
       - nas_disk_size_bytes is defined
+    fail_msg: "Set nas_disk_device, nas_disk_serial, and nas_disk_size_bytes."
 
-- name: Inspect NAS disk
+- name: Require a persistent whole-disk path
+  ansible.builtin.assert:
+    that:
+      - nas_disk_device is match('^/dev/disk/by-id/[^/]+$')
+      - nas_disk_device is not search('-part[0-9]+$')
+    fail_msg: "nas_disk_device must name a whole disk under /dev/disk/by-id/."
+
+- name: Read NAS disk identity
   ansible.builtin.command:
     argv:
       - lsblk
       - --json
       - --bytes
+      - --nodeps
       - --output
-      - PATH,SIZE,SERIAL,TYPE,FSTYPE,MOUNTPOINTS,PTTYPE,PARTN
+      - SIZE,SERIAL,TYPE
       - "{{ nas_disk_device }}"
-  register: nas_disk_info
+  register: nas_identity
   changed_when: false
+  check_mode: false
 
-- name: Parse NAS disk information
-  ansible.builtin.set_fact:
-    nas_disk: "{{ (nas_disk_info.stdout | from_json).blockdevices[0] }}"
-
-- name: Validate NAS disk identity
+- name: Verify NAS disk identity
   ansible.builtin.assert:
     that:
-      - nas_disk.type == 'disk'
-      - nas_disk.serial == nas_disk_serial
-      - (nas_disk.size | int) == (nas_disk_size_bytes | int)
-    fail_msg: "NAS disk identity validation failed."
+      - disks | length == 1
+      - disks[0].size | int == nas_disk_size_bytes | int
+      - disks[0].serial == nas_disk_serial
+      - disks[0].type == 'disk'
+    fail_msg: >-
+      Expected {{ nas_disk_device }} to be a disk with serial {{ nas_disk_serial }}
+      and size {{ nas_disk_size_bytes }} bytes; observed {{ nas_identity.stdout }}.
+  vars:
+    disks: "{{ (nas_identity.stdout | from_json).blockdevices }}"
 
-- name: Validate NAS disk layout
-  ansible.builtin.assert:
-    that:
-      - nas_disk.fstype == None
-      - nas_disk.mountpoints | reject('equalto', None) | list | length == 0
-      - >-
-        (nas_disk.pttype == None
-         and (nas_disk.children | default([]) | length == 0))
-        or
-        (nas_disk.pttype == 'gpt'
-         and (nas_disk.children | default([]) | length == 1)
-         and nas_disk.children[0].type == 'part'
-         and nas_disk.children[0].partn | int == 1
-         and nas_disk.children[0].fstype == 'xfs'
-         and (nas_disk.children[0].mountpoints
-              | reject('equalto', None) | list | length == 0))
-    fail_msg: "Unexpected disk layout. Refusing to provision."
+# Safe mode permits creating filesystems on blank disks. Require initialization
+# explicitly instead of letting an ordinary run initialize a replacement disk.
+- name: Require existing XFS storage during normal runs
+  when: not nas_initialize | bool
+  block:
+    - name: Read NAS filesystem type
+      ansible.builtin.command:
+        argv: [blkid, -p, -o, value, -s, TYPE, "{{ nas_disk_device }}"]
+      register: nas_filesystem
+      changed_when: false
+      check_mode: false
+      failed_when: nas_filesystem.rc not in [0, 2]
+
+    - name: Verify NAS filesystem
+      ansible.builtin.assert:
+        that:
+          - nas_filesystem.stdout | trim == 'xfs'
+        fail_msg: >-
+          Expected whole-disk XFS on {{ nas_disk_device }}; observed
+          {{ nas_filesystem.stdout | trim | default('no recognized filesystem', true) }}.
+          To ERASE this disk and initialize it, run make nas-initialize.

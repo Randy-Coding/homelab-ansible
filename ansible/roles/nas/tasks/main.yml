@@ -1,5 +1,61 @@
-- name: Validate NAS disk
+---
+- name: Verify NAS disk
   ansible.builtin.import_tasks: disk.yml
 
-- name: Provision NAS disk
-  ansible.builtin.import_tasks: provision.yml
+# The two role calls require a real state transition. A dry run cannot remove
+# the old filesystem and then discover the resulting blank disk.
+- name: Explain initialization in check mode
+  ansible.builtin.debug:
+    msg: "Would erase {{ nas_disk_device }} and create fresh XFS at {{ nas_mount_point }}. Storage changes are skipped in check mode."
+  when:
+    - nas_initialize | bool
+    - ansible_check_mode
+
+- name: Configure NAS storage
+  when: not (ansible_check_mode and nas_initialize | bool)
+  block:
+    - name: Erase NAS storage when explicitly requested
+      ansible.builtin.include_role:
+        name: linux-system-roles.storage
+        public: false
+      vars:
+        storage_safe_mode: false
+        storage_pools: []
+        storage_volumes:
+          - name: nas
+            type: disk
+            disks: ["{{ nas_disk_device }}"]
+            state: absent
+      when: nas_initialize | bool
+
+    - name: Manage NAS filesystem and mount
+      ansible.builtin.include_role:
+        name: linux-system-roles.storage
+        public: false
+      vars:
+        storage_safe_mode: true
+        storage_pools: []
+        storage_volumes:
+          - name: nas
+            type: disk
+            disks: ["{{ nas_disk_device }}"]
+            fs_type: xfs
+            mount_point: "{{ nas_mount_point }}"
+            mount_options: defaults,uquota,prjquota
+            mount_user: root
+            mount_group: root
+            mount_mode: "0755"
+
+    - name: Prepare storage directories for future NAS services
+      ansible.builtin.file:
+        path: "{{ nas_mount_point }}/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - shares
+        - backups
+        - backups/file-history
+        - backups/time-machine
+        - immich

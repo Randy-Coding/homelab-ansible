@@ -1,3 +1,10 @@
+---
+roles:
+  - name: linux-system-roles.storage
+    src: https://github.com/linux-system-roles/storage.git
+    scm: git
+    version: "1.22.1"
+
 collections:
   - name: community.general
   - name: ansible.posix

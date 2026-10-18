@@ -1,2 +1,5 @@
+---
 nas_mount_point: /srv/nas
-nas_filesystem: xfs
+# Destructive: remove existing storage and create a fresh XFS filesystem.
+# Pass only for an intentional reset: -e nas_initialize=true
+nas_initialize: false
