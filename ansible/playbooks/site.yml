@@ -2,6 +2,16 @@
   hosts: myhosts
   become: true
 
+  pre_tasks:
+    - name: Require Samba secrets before changing the host
+      ansible.builtin.assert:
+        that:
+          - samba_users | length > 0
+          - samba_users | map(attribute='password') | select('match', '^[A-Za-z0-9]+\Z') | list | length == samba_users | length
+        fail_msg: "Define each Samba password in Vault as a nonempty alphanumeric string."
+      no_log: true
+
   roles:
     - base
     - nas
+    - samba

@@ -1,44 +1,24 @@
 ---
-- name: Validate Samba share configuration
+# The upstream credential task interpolates passwords into a shell command.
+# Restrict its input to the agreed alphanumeric password policy.
+- name: Validate Samba accounts and Vault passwords (nonempty alphanumeric only)
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[a-z_][a-z0-9_-]*\Z')
+      - item.password is string
+      - item.password is match('^[A-Za-z0-9]+\Z')
+  loop: "{{ samba_users }}"
+  no_log: true
+
+- name: Validate explicit Samba share access
   ansible.builtin.assert:
     that:
       - item.name is defined
-      - item.path is defined
       - item.valid_users is defined
+      - item.valid_users is string
       - item.valid_users | length > 0
-    fail_msg: "Each Samba share needs a name, path, and nonempty valid_users list."
+    fail_msg: "Each share needs a name and valid_users as a Samba user/group string."
   loop: "{{ samba_shares }}"
-
-- name: Install Samba
-  ansible.builtin.dnf:
-    name:
-      - samba
-      - samba-common-tools
-    state: present
-
-- name: Configure Samba
-  ansible.builtin.template:
-    src: smb.conf.j2
-    dest: /etc/samba/smb.conf
-    owner: root
-    group: root
-    mode: "0644"
-    validate: /usr/bin/testparm -s %s
-  notify: Restart Samba
-
-- name: Enable and start Samba
-  ansible.builtin.systemd_service:
-    name: smb
-    enabled: true
-    state: started
-
-- name: Allow samba through firewall
-  ansible.posix.firewalld:
-    service: samba
-    zone: "{{ samba_firewall_zone }}"
-    state: enabled
-    permanent: true
-    immediate: true
 
 - name: Create Samba group
   ansible.builtin.group:
@@ -58,7 +38,16 @@
     shell: >-
       {{ omit if item in ansible_facts.getent_passwd else '/sbin/nologin' }}
     state: present
-  loop: "{{ samba_accounts }}"
+  loop: "{{ samba_users | map(attribute='name') | list }}"
 
-- name: Set up missing Samba credentials
-  ansible.builtin.import_tasks: credentials.yml
+- name: Manage Samba with the community collection
+  ansible.builtin.include_role:
+    name: vladgh.samba.server
+
+- name: Allow Samba through firewall
+  ansible.posix.firewalld:
+    service: samba
+    zone: "{{ samba_firewall_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true

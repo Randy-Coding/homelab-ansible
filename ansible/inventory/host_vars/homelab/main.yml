@@ -5,7 +5,21 @@ nas_disk_device: "/dev/disk/by-id/usb-Seagate_Backup+_Hub_BK_NA9RL44M-0:0"
 nas_disk_serial: "NA9RL44M"
 nas_disk_size_bytes: 10000831348224
 
-samba_accounts:
-  - randy
+samba_users:
+  - name: randy
+    password: "{{ vault_samba_passwords.randy }}"
 
 samba_group: nas
+
+# vladgh.samba.server settings. Inventory overrides collection defaults.
+samba_workgroup: WORKGROUP
+samba_server_string: Homelab NAS
+samba_shares_root: "{{ nas_mount_point }}/shares"
+samba_shares: []
+samba_enable_netbios: false
+samba_wins_support: false
+samba_local_master: false
+samba_domain_master: false
+samba_preferred_master: false
+samba_load_homes: false
+samba_load_printers: false

@@ -9,3 +9,5 @@ collections:
   - name: community.general
   - name: ansible.posix
   - name: community.docker
+  - name: vladgh.samba
+    version: "3.5.6"

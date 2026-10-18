@@ -1,53 +1,60 @@
 # Samba
 
-Basic native Samba role for Rocky Linux. It installs Samba, templates
-`/etc/samba/smb.conf`, validates it with `testparm`, and enables the `smb` service.
-Configuration changes notify a restart handler. The role owns the complete
-configuration file.
+This local role handles Linux accounts and firewalld, then delegates Samba
+packages, configuration, share directories, credentials, and service management
+to the pinned `vladgh.samba.server` role. No custom password prompts or
+credential-database logic are maintained here.
 
-The role is not yet included in `ansible/playbooks/site.yml`. When accounts,
-filesystem permissions, SELinux labels, and firewall access are ready, add
-`samba` after `nas` in the playbook roles.
+## Accounts
 
-## Share configuration
+Host inventory defines accounts and references secrets from the encrypted Vault:
 
-Example inventory variables for a future share:
+```yaml
+samba_group: nas
+samba_users:
+  - name: randy
+    password: "{{ vault_samba_passwords.randy }}"
+```
+
+A corresponding Linux account is created if missing, with no home or login shell.
+Existing accounts retain their shell and other group memberships.
+
+Passwords must be nonempty alphanumeric strings. This policy avoids shell
+quoting and `echo` interpretation problems in the pinned upstream credential
+task. Secret-bearing validation and upstream credential tasks use `no_log`.
+Existing Samba passwords are not rotated when Vault values change; password
+rotation remains an explicit operation.
+
+## Shares
+
+Shares use the upstream collection's format. In particular, `valid_users` is a
+Samba string, not the list used by the old custom template:
 
 ```yaml
 samba_shares:
-  - name: files
-    path: /srv/nas/shares/files
-    valid_users: ['@nas']
+  - name: family
+    path: /srv/nas/shares/family
+    valid_users: '@nas'
+    group: nas
+    owner: root
     read_only: false
+    create_mode: '0660'
+    force_create_mode: '0660'
+    directory_mode: '2770'
+    force_directory_mode: '2770'
+    setype: samba_share_t
 ```
 
-`valid_users` is a required, nonempty list of Samba users or `@group` names.
-Shares default to read-only and browseable; guest access is disabled. No shares
-are defined by default. Existing Samba defaults handle protocol negotiation.
+This is an example, not an enabled share. Private directories need their own
+owner, access restrictions, and restrictive masks; do not reuse family-share
+permissions for them. Persistent SELinux path mappings are still needed.
 
-## Accounts and passwords
+The role is included after `nas` in `site.yml`. No shares are enabled yet;
+share permissions and persistent SELinux mappings are the next configuration
+step. Modern SMB is configured without NetBIOS/WINS browser-master features.
+Time Machine and discovery will be configured later. Host inventory holds these
+settings so they take precedence over the collection's own defaults.
 
-Set `samba_accounts` to the Linux usernames that should have Samba access and
-`samba_group` to their shared group. The role creates missing Linux accounts
-without home directories or login shells, and preserves existing accounts'
-shells and supplementary groups.
-
-The role checks Samba's account database using `pdbedit --list`. Missing entries
-are created using `vault_samba_passwords` from the encrypted inventory file.
-Passwords are supplied over standard input with `no_log`, and existing Samba
-entries are not modified. There are no interactive deployment prompts.
-
-Run `make vault-setup` once before deploying to create the local Vault key and
-generate encrypted passwords. Rerun it after adding an account to generate only
-that account's missing secret. Existing passwords and other Vault fields remain
-unchanged. See the repository README for key storage and recovery.
-
-Changing a Vault password value alone does not change an existing Samba account's
-password; account password rotation is a separate explicit operation.
-
-The role also opens the Samba service in `samba_firewall_zone`. Share-directory
-permissions, SELinux labels, quotas, Time Machine, and File History still need
-implementation; adding a template entry alone does not make a share usable.
-
-References: [smb.conf](https://www.samba.org/samba/docs/current/man-html/smb.conf.5)
-and [testparm](https://www.samba.org/samba/docs/current/man-html/testparm.1.html).
+See the root README for Vault creation and unattended deployment. See the
+[upstream documentation](https://github.com/vladgh/ansible-collection-vladgh-samba)
+for supported share options.

@@ -44,11 +44,12 @@ calls cannot model deletion followed by creation without changing real state.
 
 ## Application storage
 
-The role creates these root-owned directories with mode `0750` after mounting:
+The NAS role creates the backup and Immich directories with mode `0750` after
+mounting. The Samba role manages `shares/`:
 
 | Path under `/srv/nas` | Intended use |
 | --- | --- |
-| `shares/` | Samba shares; selected folders can later be exposed through FileBrowser Quantum |
+| `shares/` | Managed by the Samba role; selected folders can later be exposed through FileBrowser Quantum |
 | `backups/file-history/` | Windows File History backups |
 | `backups/time-machine/` | macOS Time Machine backups |
 | `immich/` | Immich-managed photo and video storage |

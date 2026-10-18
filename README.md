@@ -1,46 +1,54 @@
 # Homelab
 
-## Unattended Vault use
+## Vault secrets
 
-Run once before deployment:
+The encrypted inventory file is tracked in Git. Its unlock password is stored
+outside the repository at `~/.config/homelab/vault-password` and backed up in your
+password manager. Use directory permissions `0700` and file permissions `0600`.
+Anyone who can read the key can decrypt the Vault; without it, Git alone cannot
+recover the secrets.
 
-```sh
-make vault-setup
-```
+On the first `make apply` (or `make check`), if the encrypted file is missing:
 
-An Ansible playbook creates a random Vault key at
-`~/.config/homelab/vault-password`, with directory mode `0700` and file mode
-`0600`. It generates random alphanumeric Samba passwords for the accounts in
-inventory and writes them directly to an encrypted
-`ansible/inventory/host_vars/homelab/vault.yml`. Plaintext secrets are not written
-to a temporary file or printed in task output.
+1. Confirm that you want to create it.
+2. Enter and confirm the Samba password for each configured user. Input is hidden;
+   use a nonempty password containing only letters and digits.
+3. A local unlock key is generated if missing, and standard Ansible Vault encrypts
+   the secret variables. No editor or YAML authoring is needed.
+4. Back up the local unlock key in your password manager, and commit the encrypted
+   `vault.yml`. Its first line should begin with `$ANSIBLE_VAULT;`.
 
-Commit the encrypted `vault.yml` to Git. The unlock key is outside the repository;
-back it up in your password manager. Losing it means the encrypted secrets cannot
-be recovered from Git. Anyone with access to the key can decrypt the Vault.
+The first-time helper only creates a missing Vault. It does not decrypt, merge,
+or rewrite existing Vault files, and no plaintext secret file is created. When
+the Vault exists, Make skips onboarding entirely. Cancellation stops deployment.
 
-Normal deployments do not generate or rotate secrets:
+Use `make vault-edit` to edit an existing Vault. When adding an account, add its
+password there and reference it from `samba_users` in host inventory. Existing
+Samba passwords are not automatically rotated by changing their Vault values.
+
+## Unattended deployment
 
 ```sh
 make check
 make apply
 ```
 
-Both read the key automatically, without prompts. If the key is missing, restore
-it first. Do not generate a new key for an existing encrypted Vault. The setup
-playbook refuses to do that and fails if an existing key cannot decrypt the file.
+After first-time creation, these commands read the local key automatically
+without prompts. If an existing Vault's key is missing or incorrect, restore the
+original key; deployments fail rather than replacing it. Required Samba secrets
+are checked before host-changing roles run. Existing Vault files are never
+rewritten by deployments.
 
-Use `make vault-edit` to view or edit passwords in your editor. After adding an
-account in inventory, rerun `make vault-setup`: it preserves existing secrets and
-adds only missing account passwords. This does not rotate existing Samba account
-passwords. Samba service configuration is still being developed and is not yet
-enabled in the main playbook.
-
-To use another key location, pass the same override to every Make command:
+The key path can be overridden consistently for all Make commands:
 
 ```sh
 make apply VAULT_PASSWORD_FILE=/path/outside/the/repository/vault-password
 ```
 
-`make nas-initialize` also uses the key automatically. It remains a destructive
-operation that erases and recreates the NAS filesystem on every invocation.
+Samba uses the pinned `vladgh.samba` collection for its configuration and credential
+management. Its local wrapper handles Linux users and firewall rules. Samba is
+enabled after storage preparation in the main playbook. No shares are enabled
+yet; share permissions and persistent SELinux mappings remain to be configured.
+
+`make nas-initialize` also reads the key automatically. It is destructive: every
+invocation erases and recreates the NAS filesystem.
