@@ -31,3 +31,11 @@
     name: smb
     enabled: true
     state: started
+
+- name: Allow samba through firewall
+  ansible.posix.firewalld:
+    service: samba
+    zone: "{{ samba_firewall_zone }}"
+    state: enabled
+    permanent: true
+    immediate: true

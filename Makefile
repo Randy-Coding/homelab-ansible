@@ -12,12 +12,15 @@ setup: bootstrap
 	.venv/bin/ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles/external
 	.venv/bin/ansible-galaxy collection install -r ansible/requirements.yml
 
+lint: setup
+	.venv/bin/yamllint ansible
+
 check: setup
 	.venv/bin/ansible-playbook ansible/playbooks/site.yml --check --diff
 
-apply: setup
+apply: lint
 	.venv/bin/ansible-playbook ansible/playbooks/site.yml
 
 # Destructive: erase the configured NAS disk and create fresh storage.
-nas-initialize: setup
+nas-initialize: lint
 	.venv/bin/ansible-playbook ansible/playbooks/site.yml -e nas_initialize=true
