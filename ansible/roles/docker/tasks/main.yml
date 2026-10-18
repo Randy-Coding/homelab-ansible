@@ -1,0 +1,27 @@
+---
+- name: Configure Docker's stable RHEL repository
+  ansible.builtin.yum_repository:
+    name: docker-ce-stable
+    file: docker-ce
+    description: Docker CE Stable
+    baseurl: https://download.docker.com/linux/rhel/$releasever/$basearch/stable
+    enabled: true
+    gpgcheck: true
+    gpgkey: https://download.docker.com/linux/rhel/gpg
+
+- name: Manage Docker Engine with the upstream role
+  ansible.builtin.include_role:
+    name: geerlingguy.docker
+  vars:
+    docker_daemon_options: "{{ docker_daemon_config }}"
+    # rpm_key cannot parse the host's OpenPGP v6 keys on Rocky 10.
+    # DNF imports the repository key itself, keeping package checks enabled.
+    docker_add_repo: false
+    docker_packages:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+    docker_packages_state: "{{ 'latest' if docker_upgrade | bool else 'present' }}"
+    docker_install_compose_plugin: true
+    docker_compose_package_state: "{{ 'latest' if docker_upgrade | bool else 'present' }}"

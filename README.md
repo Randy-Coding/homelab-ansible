@@ -54,6 +54,40 @@ are configured with permissions and persistent SELinux mappings.
 `make nas-initialize` also reads the key automatically. It is destructive: every
 invocation erases and recreates the NAS filesystem.
 
+## Docker
+
+The local `docker` role delegates installation and service management to
+`geerlingguy.docker`, pinned to version `8.0.0` in `ansible/requirements.yml`.
+It uses Docker's official RHEL repository for this Rocky Linux host, installs
+Engine, CLI, containerd, Buildx, and the Compose plugin, and enables Docker at
+boot. Run `make setup` to install the role dependency, then `make check` to
+preview and `make apply` to install and configure Docker.
+
+The wrapper manages the repository with package signature checks enabled. DNF
+handles the signing key during installation, avoiding an Ansible `rpm_key`
+compatibility issue with OpenPGP v6 keys already installed on Rocky Linux 10.
+
+Docker uses its default storage location, `/var/lib/docker`, and the local Unix
+socket. Use `sudo docker` for interactive access; no users are added to the
+Docker group. The default `local` logging driver rotates logs at 20 MB with five
+files per container. Settings live in
+`ansible/roles/docker/defaults/main.yml` and can be overridden in inventory.
+Changing daemon settings can restart Docker; logging defaults apply to newly
+created containers.
+
+Normal applies install missing packages without requesting upgrades. For an
+explicit upgrade of Engine and its plugins, run:
+
+```sh
+.venv/bin/ansible-playbook ansible/playbooks/site.yml \
+  --vault-password-file "$HOME/.config/homelab/vault-password" \
+  -e docker_upgrade=true
+```
+
+This runs the full playbook and may restart Docker. The upgrade flag controls
+Ansible's package tasks; it does not prevent upgrades through other system tools.
+Application deployment and push-triggered automation are outside this role.
+
 ## Tailscale
 
 The pinned `artis3n.tailscale.machine` role installs Tailscale if missing and

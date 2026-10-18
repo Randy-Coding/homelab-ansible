@@ -1,5 +1,9 @@
 ---
 roles:
+  - name: geerlingguy.docker
+    src: https://github.com/geerlingguy/ansible-role-docker.git
+    scm: git
+    version: "8.0.0"
   - name: linux-system-roles.storage
     src: https://github.com/linux-system-roles/storage.git
     scm: git

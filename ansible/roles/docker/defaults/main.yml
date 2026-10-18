@@ -1,0 +1,8 @@
+---
+docker_upgrade: false
+
+docker_daemon_config:
+  log-driver: local
+  log-opts:
+    max-size: "20m"
+    max-file: "5"
