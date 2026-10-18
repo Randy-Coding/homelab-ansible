@@ -1,3 +1,4 @@
+---
 - name: Configure homelab
   hosts: myhosts
   become: true

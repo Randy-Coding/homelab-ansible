@@ -1,3 +1,4 @@
+---
 # Use RPM-installed host libraries (including blivet), not the controller venv.
 ansible_python_interpreter: /usr/bin/python3
 
@@ -15,11 +16,27 @@ samba_group: nas
 samba_workgroup: WORKGROUP
 samba_server_string: Homelab NAS
 samba_shares_root: "{{ nas_mount_point }}/shares"
-samba_shares: []
+samba_shares:
+  - name: family
+    path: /srv/nas/shares/family
+    valid_users: "@nas"
+    owner: root
+    group: nas
+    read_only: false
+    create_mode: "0660"
+    force_create_mode: "0660"
+    directory_mode: "2770"
+    force_directory_mode: "2770"
+    setype: samba_share_t
 samba_enable_netbios: false
 samba_wins_support: false
 samba_local_master: false
 samba_domain_master: false
 samba_preferred_master: false
-samba_load_homes: false
 samba_load_printers: false
+samba_load_homes: true
+samba_homes_include: homes.conf.j2
+samba_apple_extensions: true
+# Load fruit consistently so a Mac's first connection negotiates Apple support.
+samba_global_config_extras: |
+  vfs objects = fruit streams_xattr

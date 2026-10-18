@@ -46,6 +46,11 @@
             mount_group: root
             mount_mode: "0755"
 
+    - name: Initialize the NAS mount directory SELinux label
+      community.general.serestorecon:
+        path: "{{ nas_mount_point }}"
+        recurse: false
+
     - name: Prepare storage directories for future NAS services
       ansible.builtin.file:
         path: "{{ nas_mount_point }}/{{ item }}"

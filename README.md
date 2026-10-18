@@ -47,8 +47,8 @@ make apply VAULT_PASSWORD_FILE=/path/outside/the/repository/vault-password
 
 Samba uses the pinned `vladgh.samba` collection for its configuration and credential
 management. Its local wrapper handles Linux users and firewall rules. Samba is
-enabled after storage preparation in the main playbook. No shares are enabled
-yet; share permissions and persistent SELinux mappings remain to be configured.
+enabled after storage preparation in the main playbook. The family share, private user folders, and per-user Time Machine destinations
+are configured with permissions and persistent SELinux mappings.
 
 `make nas-initialize` also reads the key automatically. It is destructive: every
 invocation erases and recreates the NAS filesystem.

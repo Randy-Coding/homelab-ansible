@@ -1,0 +1,10 @@
+[homes]
+    path = {{ samba_shares_root }}/%S
+    valid users = %S
+    guest ok = no
+    browseable = no
+    read only = no
+    create mask = 0600
+    force create mode = 0600
+    directory mask = 0700
+    force directory mode = 0700

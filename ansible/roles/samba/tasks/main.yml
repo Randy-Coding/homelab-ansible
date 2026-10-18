@@ -40,9 +40,67 @@
     state: present
   loop: "{{ samba_users | map(attribute='name') | list }}"
 
+- name: Install SELinux management tools
+  ansible.builtin.dnf:
+    name:
+      - policycoreutils-python-utils
+      - python3-libselinux
+      - python3-libsemanage
+    state: present
+
+- name: Define persistent SELinux labels for Samba shares
+  community.general.sefcontext:
+    target: "{{ samba_shares_root | regex_escape }}(/.*)?"
+    setype: samba_share_t
+    state: present
+
+- name: Start with the configured shared folders
+  ansible.builtin.set_fact:
+    samba_effective_shares: "{{ samba_shares }}"
+
+- name: Add a private Time Machine share for each Samba account
+  ansible.builtin.set_fact:
+    samba_effective_shares: "{{ samba_effective_shares + [time_machine_share] }}"
+  vars:
+    time_machine_share:
+      name: "time-machine-{{ item }}"
+      path: "{{ samba_shares_root }}/time-machine-{{ item }}"
+      valid_users: "{{ item }}"
+      owner: "{{ item }}"
+      group: "{{ samba_group }}"
+      read_only: false
+      create_mode: "0600"
+      force_create_mode: "0600"
+      directory_mode: "0700"
+      force_directory_mode: "0700"
+      setype: samba_share_t
+      vfs_objects:
+        - name: fruit
+          options:
+            - name: time machine
+              value: "yes"
+        - name: streams_xattr
+  loop: "{{ samba_users | map(attribute='name') | list }}"
+
 - name: Manage Samba with the community collection
   ansible.builtin.include_role:
     name: vladgh.samba.server
+  vars:
+    samba_shares: "{{ samba_effective_shares }}"
+
+- name: Create a private directory for each Samba account
+  ansible.builtin.file:
+    path: "{{ samba_shares_root }}/{{ item }}"
+    state: directory
+    owner: "{{ item }}"
+    group: "{{ samba_group }}"
+    mode: "0700"
+  loop: "{{ samba_users | map(attribute='name') | list }}"
+
+- name: Apply SELinux labels to Samba shares
+  community.general.serestorecon:
+    path: "{{ samba_shares_root }}"
+    recurse: true
 
 - name: Allow Samba through firewall
   ansible.posix.firewalld:
