@@ -1,0 +1,40 @@
+---
+- name: Check for existing disk signatures
+  ansible.builtin.command:
+    argv:
+      - wipefs
+      - --no-act
+      - --noheadings
+      - "{{ nas_disk_device }}"
+  register: nas_signatures
+  changed_when: false
+  when: nas_disk.pttype == None
+
+- name: Refuse unexpected disk signatures
+  ansible.builtin.assert:
+    that:
+      - nas_signatures.stdout | trim == ''
+    fail_msg: "Disk contains existing signatures. Refusing to overwrite."
+  when: nas_disk.pttype == None
+
+- name: Create NAS partition
+  community.general.parted:
+    device: "{{ nas_disk_device }}"
+    label: gpt
+    number: 1
+    state: present
+    part_start: 1MiB
+    part_end: 100%
+  when: nas_disk.pttype == None
+
+- name: Wait for NAS partition device
+  ansible.builtin.wait_for:
+    path: "{{ nas_disk_device }}-part1"
+    state: present
+    timeout: 30
+
+- name: Create XFS filesystem
+  community.general.filesystem:
+    dev: "{{ nas_disk_device }}-part1"
+    fstype: xfs
+    force: false

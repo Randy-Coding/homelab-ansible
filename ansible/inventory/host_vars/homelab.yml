@@ -1,1 +1,3 @@
 nas_disk_device: "/dev/disk/by-id/usb-Seagate_Backup+_Hub_BK_NA9RL44M-0:0"
+nas_disk_serial: "NA9RL44M"
+nas_disk_size_bytes: 10000831348224

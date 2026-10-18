@@ -1,19 +1,49 @@
+---
 - name: Require NAS disk configuration
   ansible.builtin.assert:
     that:
       - nas_disk_device is defined
-      - nas_disk_device | length > 0
-    fail_msg: "nas_disk_device must be configured."
+      - nas_disk_serial is defined
+      - nas_disk_size_bytes is defined
 
-- name: Check whether NAS disk exists
-  ansible.builtin.stat:
-    path: "{{ nas_disk_device }}"
-    follow: true
-  register: nas_disk_stat
+- name: Inspect NAS disk
+  ansible.builtin.command:
+    argv:
+      - lsblk
+      - --json
+      - --bytes
+      - --output
+      - PATH,SIZE,SERIAL,TYPE,FSTYPE,MOUNTPOINTS,PTTYPE,PARTN
+      - "{{ nas_disk_device }}"
+  register: nas_disk_info
+  changed_when: false
 
-- name: Verify NAS disk exists
+- name: Parse NAS disk information
+  ansible.builtin.set_fact:
+    nas_disk: "{{ (nas_disk_info.stdout | from_json).blockdevices[0] }}"
+
+- name: Validate NAS disk identity
   ansible.builtin.assert:
     that:
-      - nas_disk_stat.stat.exists
-      - nas_disk_stat.stat.isblk | default(false)
-    fail_msg: "NAS disk does not exist or is not a block device."
+      - nas_disk.type == 'disk'
+      - nas_disk.serial == nas_disk_serial
+      - (nas_disk.size | int) == (nas_disk_size_bytes | int)
+    fail_msg: "NAS disk identity validation failed."
+
+- name: Validate NAS disk layout
+  ansible.builtin.assert:
+    that:
+      - nas_disk.fstype == None
+      - nas_disk.mountpoints | reject('equalto', None) | list | length == 0
+      - >-
+        (nas_disk.pttype == None
+         and (nas_disk.children | default([]) | length == 0))
+        or
+        (nas_disk.pttype == 'gpt'
+         and (nas_disk.children | default([]) | length == 1)
+         and nas_disk.children[0].type == 'part'
+         and nas_disk.children[0].partn | int == 1
+         and nas_disk.children[0].fstype == 'xfs'
+         and (nas_disk.children[0].mountpoints
+              | reject('equalto', None) | list | length == 0))
+    fail_msg: "Unexpected disk layout. Refusing to provision."

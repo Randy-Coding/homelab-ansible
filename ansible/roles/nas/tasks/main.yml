@@ -1,2 +1,5 @@
 - name: Validate NAS disk
   ansible.builtin.import_tasks: disk.yml
+
+- name: Provision NAS disk
+  ansible.builtin.import_tasks: provision.yml
