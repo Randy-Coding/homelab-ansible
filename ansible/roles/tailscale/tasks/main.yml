@@ -1,0 +1,28 @@
+---
+- name: Install and start Tailscale
+  ansible.builtin.include_role:
+    name: artis3n.tailscale.machine
+  vars:
+    state: present
+    tailscale_up_skip: true
+
+- name: Connect Tailscale or request browser sign-in
+  ansible.builtin.command: tailscale up --timeout=10s
+  register: tailscale_login
+  changed_when: tailscale_login.rc != 0
+  failed_when: tailscale_login.rc != 0 and 'https://' not in tailscale_login.stderr
+  when: not ansible_check_mode
+
+- name: Wait for browser sign-in
+  ansible.builtin.pause:
+    prompt: "{{ tailscale_login.stderr }}\nComplete sign-in, then press Enter to continue"
+  when: not ansible_check_mode and tailscale_login.rc != 0
+
+- name: Verify Tailscale is connected
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status
+  changed_when: false
+  until: (tailscale_status.stdout | from_json).BackendState == 'Running'
+  retries: 12
+  delay: 5
+  when: not ansible_check_mode

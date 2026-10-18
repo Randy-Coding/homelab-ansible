@@ -34,7 +34,8 @@ make apply
 ```
 
 After first-time creation, these commands read the local key automatically
-without prompts. If an existing Vault's key is missing or incorrect, restore the
+without Vault prompts. Tailscale prompts for browser sign-in if needed during
+`make apply`. If an existing Vault's key is missing or incorrect, restore the
 original key; deployments fail rather than replacing it. Required Samba secrets
 are checked before host-changing roles run. Existing Vault files are never
 rewritten by deployments.
@@ -52,3 +53,26 @@ are configured with permissions and persistent SELinux mappings.
 
 `make nas-initialize` also reads the key automatically. It is destructive: every
 invocation erases and recreates the NAS filesystem.
+
+## Tailscale
+
+The pinned `artis3n.tailscale.machine` role installs Tailscale if missing and
+enables and starts `tailscaled`. `state: present` leaves an installed version
+unchanged. A local wrapper handles browser enrollment without requiring an OAuth
+client or enrollment secret in Vault.
+
+An already-connected NAS keeps its identity and skips the login prompt. When
+sign-in is needed, `make apply` starts Tailscale, displays the browser sign-in
+link, and pauses. Complete sign-in and press Enter; Ansible verifies the
+connection before continuing. `make check` skips enrollment and prompts.
+For persistent
+server access, disable that device's key expiry in the Tailscale admin console.
+Ansible does not manage this tailnet setting.
+
+LAN Samba access remains enabled. Tailscale is an additional access path: use
+the NAS's Tailscale IP or MagicDNS name instead of its LAN IP. Tailnet access
+policies still determine which devices can connect; no tailnet policies or
+additional firewall rules are changed by this configuration.
+
+See [Samba access over Tailscale](ansible/roles/samba/README.md#access-over-tailscale)
+for client connection addresses and credentials.

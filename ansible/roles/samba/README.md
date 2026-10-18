@@ -50,6 +50,28 @@ and `homes.conf.j2` provide each configured account's private share; the local
 role creates its owner-only directory. Persistent SELinux mappings cover the
 shares tree, and the NAS role labels the mount directory itself.
 
+## Access over Tailscale
+
+Samba listens on all interfaces by default, including `tailscale0`. The playbook
+connects Tailscale before configuring Samba. The same shares, Samba usernames,
+passwords, and file permissions apply over LAN and Tailscale.
+
+After `make apply`, run `tailscale ip -4` on the NAS to find its Tailscale IP.
+Install and sign in to Tailscale on the client, then connect using that IP:
+
+- macOS Finder → Go → Connect to Server: `smb://100.x.y.z/family`
+- Windows File Explorer: `\\100.x.y.z\family`
+- Time Machine destination: `smb://100.x.y.z/time-machine-randy`
+
+Replace `100.x.y.z` with the NAS's actual Tailscale IP. Its MagicDNS name also
+works when enabled in your tailnet. Sign in with the Samba account configured in
+inventory. Tailnet access policies must allow the client to reach TCP port 445
+on the NAS. Use a direct address; share discovery does not cross Tailscale.
+
+Tailscale's default netfilter mode accepts incoming tailnet traffic. If you
+customize its netfilter mode or the host firewall, ensure SMB traffic on
+`tailscale0` is allowed too.
+
 ## Time Machine
 
 Each configured Samba account also gets a dedicated `time-machine-USERNAME`

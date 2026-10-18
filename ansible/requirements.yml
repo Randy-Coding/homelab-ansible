@@ -12,3 +12,5 @@ collections:
   - name: community.docker
   - name: vladgh.samba
     version: "3.5.6"
+  - name: artis3n.tailscale
+    version: "1.2.1"
