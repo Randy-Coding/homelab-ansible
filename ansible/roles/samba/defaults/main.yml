@@ -1,0 +1,6 @@
+---
+samba_workgroup: WORKGROUP
+samba_server_string: Homelab NAS
+# Shares require a name, path, and nonempty valid_users list.
+# Prefix group names with @, e.g. valid_users: ['@nas'].
+samba_shares: []

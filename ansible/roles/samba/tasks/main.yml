@@ -1,0 +1,33 @@
+---
+- name: Validate Samba share configuration
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.path is defined
+      - item.valid_users is defined
+      - item.valid_users | length > 0
+    fail_msg: "Each Samba share needs a name, path, and nonempty valid_users list."
+  loop: "{{ samba_shares }}"
+
+- name: Install Samba
+  ansible.builtin.dnf:
+    name:
+      - samba
+      - samba-common-tools
+    state: present
+
+- name: Configure Samba
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/bin/testparm -s %s
+  notify: Restart Samba
+
+- name: Enable and start Samba
+  ansible.builtin.systemd_service:
+    name: smb
+    enabled: true
+    state: started
