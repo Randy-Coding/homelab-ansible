@@ -39,3 +39,26 @@
     state: enabled
     permanent: true
     immediate: true
+
+- name: Create Samba group
+  ansible.builtin.group:
+    name: "{{ samba_group }}"
+    state: present
+
+- name: Read existing Linux accounts
+  ansible.builtin.getent:
+    database: passwd
+
+- name: Ensure NAS accounts exist and belong to the Samba group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: "{{ samba_group }}"
+    append: true
+    create_home: false
+    shell: >-
+      {{ omit if item in ansible_facts.getent_passwd else '/sbin/nologin' }}
+    state: present
+  loop: "{{ samba_accounts }}"
+
+- name: Set up missing Samba credentials
+  ansible.builtin.import_tasks: credentials.yml

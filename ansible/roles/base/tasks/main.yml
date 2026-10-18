@@ -8,7 +8,7 @@
       - tar
       - make
     state: present
-    
+
 - name: Install firewalld
   ansible.builtin.dnf:
     name: firewalld
