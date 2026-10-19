@@ -1,0 +1,43 @@
+name: cronometer-bridge
+
+services:
+  bridge:
+    build: .
+    image: homelab/cronometer-bridge:e123a472
+    restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    ports:
+      - "127.0.0.1:8431:8432"
+    environment:
+      ISSUER: "${CRONOMETER_PUBLIC_URL:?Set the public HTTPS origin}"
+      UPSTREAM: http://127.0.0.1:8430
+      PORT: "8432"
+      CONFIG_DIR: /state/oauth
+      XDG_CACHE_HOME: /state/cache
+      CRONOMETER_ACCOUNT_TZ: America/New_York
+      TZ: America/New_York
+    volumes:
+      # Upstream loads .env from its working directory; only backend uses it.
+      - /etc/homelab/cronometer/credentials.env:/backend/.env:ro,Z
+      - /var/lib/homelab/cronometer:/state:Z
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket, urllib.request; socket.create_connection(('127.0.0.1', 8430), 2).close(); r = urllib.request.urlopen('http://127.0.0.1:8432/healthz', timeout=2); assert r.status == 200"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

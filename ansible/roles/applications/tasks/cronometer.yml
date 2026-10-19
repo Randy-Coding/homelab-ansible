@@ -1,0 +1,67 @@
+---
+- name: Require the public HTTPS origin
+  ansible.builtin.assert:
+    that:
+      - cronometer_public_url is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?$')
+    fail_msg: Set cronometer_public_url to the public HTTPS origin without a trailing slash or /mcp.
+
+- name: Check locally provisioned credentials and gateway password
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /etc/homelab/cronometer/credentials.env
+    - /var/lib/homelab/cronometer/oauth/password-hash
+  register: cronometer_secret_files
+
+- name: Require private credential files before deployment
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - item.stat.size | default(0) > 0
+      - item.stat.uid | default(-1) == 10001
+      - item.stat.mode | default('') == '0600'
+    fail_msg: Provision both secret files locally with owner UID 10001 and mode 0600 before enabling the bridge.
+  loop: "{{ cronometer_secret_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Prepare deployment and persistent directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /opt/homelab/cronometer-bridge, owner: root, mode: "0755"}
+    - {path: /etc/homelab/cronometer, owner: root, mode: "0700"}
+    - {path: /var/lib/homelab/cronometer, owner: "10001", mode: "0700"}
+    - {path: /var/lib/homelab/cronometer/oauth, owner: "10001", mode: "0700"}
+    - {path: /var/lib/homelab/cronometer/cache, owner: "10001", mode: "0700"}
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Copy bridge project files
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../compose/chronometer-bridge/{{ item }}"
+    dest: "/opt/homelab/cronometer-bridge/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - compose.yml
+    - Dockerfile
+    - supervisord.conf
+    - .dockerignore
+  register: cronometer_project_files
+
+- name: Deploy Cronometer bridge
+  community.docker.docker_compose_v2:
+    project_src: /opt/homelab/cronometer-bridge
+    state: present
+    build: "{{ 'always' if cronometer_project_files is changed else 'auto' }}"
+    wait: true
+    wait_timeout: 60
+  environment:
+    CRONOMETER_PUBLIC_URL: "{{ cronometer_public_url }}"
+  when: not ansible_check_mode

@@ -1,3 +1,7 @@
 .venv/
 ansible/roles/external/
 .vscode
+.env
+*.env
+*.db*
+session.json

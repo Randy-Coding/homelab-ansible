@@ -1,0 +1,4 @@
+---
+- name: Manage Cronometer bridge
+  ansible.builtin.import_tasks: cronometer.yml
+  when: cronometer_enabled | bool
