@@ -2,28 +2,44 @@
 - name: Require the public HTTPS origin
   ansible.builtin.assert:
     that:
+      - cronometer_public_url is defined
+      - cronometer_public_url is string
       - cronometer_public_url is match('^https://[A-Za-z0-9.-]+(:[0-9]+)?$')
     fail_msg: Set cronometer_public_url to the public HTTPS origin without a trailing slash or /mcp.
 
-- name: Check locally provisioned credentials and gateway password
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - /etc/homelab/cronometer/credentials.env
-    - /var/lib/homelab/cronometer/oauth/password-hash
-  register: cronometer_secret_files
-
-- name: Require private credential files before deployment
+- name: Require a Cronometer account in inventory
   ansible.builtin.assert:
     that:
-      - item.stat.isreg | default(false)
-      - item.stat.size | default(0) > 0
-      - item.stat.uid | default(-1) == 10001
-      - item.stat.mode | default('') == '0600'
-    fail_msg: Provision both secret files locally with owner UID 10001 and mode 0600 before enabling the bridge.
-  loop: "{{ cronometer_secret_files.results }}"
-  loop_control:
-    label: "{{ item.item }}"
+      - cronometer_username is defined
+      - cronometer_username is string
+      - cronometer_username | length > 0
+    fail_msg: Set cronometer_username in host inventory to the email used as a key in vault_cronometer_password.
+
+- name: Check required Vault values without displaying their contents
+  ansible.builtin.set_fact:
+    cronometer_missing_secrets: >-
+      {{ secret_checks | rejectattr('valid') | map(attribute='name') | list }}
+  vars:
+    secret_checks:
+      - name: vault_cronometer_password[cronometer_username]
+        valid: >-
+          {{ vault_cronometer_password | default(none) is mapping and
+             vault_cronometer_password.get(cronometer_username) is string and
+             vault_cronometer_password.get(cronometer_username) | length > 0 }}
+      - name: vault_cronometer_bridge_password_hash (expected 32 hex salt, colon, 128 hex hash)
+        valid: >-
+          {{ vault_cronometer_bridge_password_hash | default(none) is string and
+             vault_cronometer_bridge_password_hash is match('^[0-9a-f]{32}:[0-9a-f]{128}\Z') }}
+  no_log: true
+
+- name: Require manually configured Cronometer Vault secrets
+  ansible.builtin.assert:
+    that:
+      - cronometer_missing_secrets | length == 0
+    fail_msg: >-
+      Cronometer bridge secrets are missing or invalid: {{ cronometer_missing_secrets | join(', ') }}.
+      Run make vault-edit and add these values manually, then rerun make apply.
+      No credentials will be prompted for or generated.
 
 - name: Prepare deployment and persistent directories
   ansible.builtin.file:
@@ -41,9 +57,33 @@
   loop_control:
     label: "{{ item.path }}"
 
+- name: Write Cronometer credentials from Vault
+  ansible.builtin.copy:
+    dest: /etc/homelab/cronometer/credentials.env
+    content: |
+      CRONOMETER_USERNAME={{ cronometer_username | to_json(ensure_ascii=false) }}
+      CRONOMETER_PASSWORD={{ vault_cronometer_password[cronometer_username] | to_json(ensure_ascii=false) }}
+      CRONOMETER_TOTP_SECRET={{ vault_cronometer_totp_secret | default('') | to_json(ensure_ascii=false) }}
+    owner: "10001"
+    group: "10001"
+    mode: "0600"
+  register: cronometer_credentials
+  no_log: true
+  diff: false
+
+- name: Write gateway password hash
+  ansible.builtin.copy:
+    dest: /var/lib/homelab/cronometer/oauth/password-hash
+    content: "{{ vault_cronometer_bridge_password_hash }}\n"
+    owner: "10001"
+    group: "10001"
+    mode: "0600"
+  no_log: true
+  diff: false
+
 - name: Copy bridge project files
   ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../compose/chronometer-bridge/{{ item }}"
+    src: "{{ playbook_dir }}/../../compose/cronometer-bridge/{{ item }}"
     dest: "/opt/homelab/cronometer-bridge/{{ item }}"
     owner: root
     group: root
@@ -59,9 +99,14 @@
   community.docker.docker_compose_v2:
     project_src: /opt/homelab/cronometer-bridge
     state: present
-    build: "{{ 'always' if cronometer_project_files is changed else 'auto' }}"
+    build: "{{ 'always' if cronometer_project_files is changed else 'policy' }}"
+    recreate: "{{ 'always' if cronometer_credentials is changed else 'auto' }}"
     wait: true
     wait_timeout: 60
   environment:
     CRONOMETER_PUBLIC_URL: "{{ cronometer_public_url }}"
+  when: not ansible_check_mode
+
+- name: Manage authenticated bridge HTTPS access
+  ansible.builtin.import_tasks: cronometer-funnel.yml
   when: not ansible_check_mode

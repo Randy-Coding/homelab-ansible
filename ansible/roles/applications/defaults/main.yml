@@ -1,4 +1,3 @@
 ---
 # Enable in host inventory after local credentials and the HTTPS URL are ready.
-cronometer_enabled: false
-cronometer_public_url: ""
+cronometer_enabled: true

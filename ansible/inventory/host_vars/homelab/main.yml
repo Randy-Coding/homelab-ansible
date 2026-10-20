@@ -2,6 +2,10 @@
 # Use RPM-installed host libraries (including blivet), not the controller venv.
 ansible_python_interpreter: /usr/bin/python3
 
+# Select the account stored in the Vault's username-to-password mapping.
+cronometer_username: randyalejo2004@gmail.com
+cronometer_public_url: https://homelab.tail10fa41.ts.net
+
 nas_disk_device: "/dev/disk/by-id/usb-Seagate_Backup+_Hub_BK_NA9RL44M-0:0"
 nas_disk_serial: "NA9RL44M"
 nas_disk_size_bytes: 10000831348224

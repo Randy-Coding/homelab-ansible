@@ -1,0 +1,32 @@
+---
+- name: Read existing Tailscale routes
+  ansible.builtin.command: tailscale serve status --json
+  register: cronometer_serve_status
+  changed_when: false
+
+- name: Manage the bridge Funnel route
+  vars:
+    config: "{{ cronometer_serve_status.stdout | from_json }}"
+    endpoint: "{{ cronometer_public_url | regex_replace('^https://', '') }}:443"
+    expected_web: "{{ {endpoint: {'Handlers': {'/': {'Proxy': 'http://127.0.0.1:8431'}}}} }}"
+    https_routes: >-
+      {{ config.get('Web', {}) | dict2items |
+         selectattr('key', 'search', ':443$') | items2dict }}
+  block:
+    - name: Refuse conflicting routes or additional services on HTTPS port 443
+      ansible.builtin.assert:
+        that:
+          - config.get('Foreground', {}) | length == 0
+          - "config.get('TCP', {}).get('443', {}) in [{}, {'HTTPS': true}]"
+          - https_routes in [{}, expected_web]
+        fail_msg: >-
+          Funnel port 443 conflicts with an existing service. Inspect tailscale
+          serve status before proceeding; no routes have been overwritten.
+
+    - name: Enable persistent Funnel if it is not already configured
+      ansible.builtin.command: >-
+        timeout 15 tailscale funnel --bg --yes --https=443 http://127.0.0.1:8431
+      changed_when: true
+      when: >-
+        https_routes != expected_web or
+        not config.get('AllowFunnel', {}).get(endpoint, false)
